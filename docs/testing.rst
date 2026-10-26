@@ -40,6 +40,11 @@ method level and also as a
                 self.assertEqual(config.YOUR_FAVOURITE_COLOR, "Blue?")
 
 
+The method decorator also supports ``async def`` tests. The overridden values
+remain active until the awaited test completes, including when it raises an
+exception.
+
+
 Pytest usage
 ~~~~~~~~~~~~
 
