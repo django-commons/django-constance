@@ -179,7 +179,7 @@ class ConstanceAdmin(admin.ModelAdmin):
                 content_type=ct,
                 object_id="Config",
             )
-            .select_related()
+            .select_related("user", "content_type")
             .order_by("-action_time")
         )
 
