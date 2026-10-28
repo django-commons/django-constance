@@ -332,6 +332,60 @@ class TestAdmin(TestCase):
             # Clean up FIELDS to avoid leaking into other tests
             FIELDS.pop("language_select", None)
 
+    @mock.patch(
+        "constance.settings.ADDITIONAL_FIELDS",
+        {
+            "language_select": [
+                "django.forms.fields.TypedMultipleChoiceField",
+                {
+                    "widget": "django.forms.CheckboxSelectMultiple",
+                    "choices": (("en", "English"), ("de", "German"), ("fr", "French")),
+                    "coerce": str,
+                },
+            ],
+        },
+    )
+    @mock.patch(
+        "constance.settings.CONFIG",
+        {
+            "LANGUAGES": (("en", "de"), "Supported languages", "language_select"),
+        },
+    )
+    def test_reset_to_default_multi_select_tuple(self):
+        """
+        Test that multi-select config values with a tuple default serialize
+        correctly to a flat JSON list.
+        """
+        from constance.forms import FIELDS
+        from constance.forms import parse_additional_fields
+
+        FIELDS.update(
+            parse_additional_fields(
+                {
+                    "language_select": [
+                        "django.forms.fields.TypedMultipleChoiceField",
+                        {
+                            "widget": "django.forms.CheckboxSelectMultiple",
+                            "choices": (("en", "English"), ("de", "German"), ("fr", "French")),
+                            "coerce": str,
+                        },
+                    ]
+                }
+            )
+        )
+        try:
+            self.client.login(username="admin", password="nimda")
+            request = self.rf.get("/admin/constance/config/")
+            request.user = self.superuser
+            response = self.options.changelist_view(request, {})
+            response.render()
+            content = response.content.decode()
+
+            self.assertIn('data-field-type="multi-select"', content)
+            self.assertIn('data-default="[&quot;en&quot;, &quot;de&quot;]"', content)
+        finally:
+            FIELDS.pop("language_select", None)
+
     @mock.patch("constance.settings.CONFIG_FIELDSETS", {"FieldSetOne": ("INT_VALUE", "STRING_VALUE")})
     @mock.patch(
         "constance.settings.CONFIG",

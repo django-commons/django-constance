@@ -37,7 +37,7 @@
                         {% endif %}
                         {% endspaceless %}"
                         data-default="{% spaceless %}
-                        {% if item.is_checkbox %}{% if item.raw_default %} true {% else %} false {% endif %}
+                        {% if item.is_checkbox %}{% if item.raw_default %}true{% else %}false{% endif %}
                         {% elif item.is_multi_select %}{{ item.json_default }}
                         {% elif item.is_date %}{{ item.raw_default|date:"U" }}
                         {% elif item.is_datetime %}{{ item.raw_default|date:"U" }}
