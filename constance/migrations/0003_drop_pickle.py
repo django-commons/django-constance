@@ -33,7 +33,8 @@ def migrate_pickled_data(apps, schema_editor) -> None:  # pragma: no cover
 
     for constance in Constance.objects.using(db_alias).exclude(value=None):
         if not is_already_migrated(constance.value):
-            constance.value = dumps(pickle.loads(b64decode(constance.value.encode())))  # noqa: S301
+            # encoding="latin1" is required to load datetime, date and time values pickled by Python 2.
+            constance.value = dumps(pickle.loads(b64decode(constance.value.encode()), encoding="latin1"))  # noqa: S301
             constance.save(using=db_alias, update_fields=["value"])
 
     if settings.BACKEND in (
@@ -56,7 +57,7 @@ def migrate_pickled_data(apps, schema_editor) -> None:  # pragma: no cover
             prefixed_key = f"{_prefix}{key}"
             value = _rd.get(prefixed_key)
             if value is not None and not is_already_migrated(value):
-                redis_migrated_data[prefixed_key] = dumps(pickle.loads(value))  # noqa: S301
+                redis_migrated_data[prefixed_key] = dumps(pickle.loads(value, encoding="latin1"))  # noqa: S301
         for prefixed_key, value in redis_migrated_data.items():
             _rd.set(prefixed_key, value)
 
