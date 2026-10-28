@@ -33,8 +33,8 @@ class override_config(override_settings):
 
             @wraps(test_func)
             async def inner(*args, **kwargs):
-                await sync_to_async(self.enable, thread_sensitive=True)()
                 try:
+                    await sync_to_async(self.enable, thread_sensitive=True)()
                     return await test_func(*args, **kwargs)
                 finally:
                     await sync_to_async(self.disable, thread_sensitive=True)()
