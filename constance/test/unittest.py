@@ -1,5 +1,7 @@
 from functools import wraps
 
+from asgiref.sync import iscoroutinefunction
+from asgiref.sync import sync_to_async
 from django import VERSION as DJANGO_VERSION
 from django.test import SimpleTestCase
 from django.test.utils import override_settings
@@ -27,10 +29,22 @@ class override_config(override_settings):
                 raise Exception("Only subclasses of Django SimpleTestCase can be decorated with override_config")
             return self.modify_test_case(test_func)
 
-        @wraps(test_func)
-        def inner(*args, **kwargs):
-            with self:
-                return test_func(*args, **kwargs)
+        if iscoroutinefunction(test_func):
+
+            @wraps(test_func)
+            async def inner(*args, **kwargs):
+                try:
+                    await sync_to_async(self.enable, thread_sensitive=True)()
+                    return await test_func(*args, **kwargs)
+                finally:
+                    await sync_to_async(self.disable, thread_sensitive=True)()
+
+        else:
+
+            @wraps(test_func)
+            def inner(*args, **kwargs):
+                with self:
+                    return test_func(*args, **kwargs)
 
         return inner
 
