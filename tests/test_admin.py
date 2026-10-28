@@ -421,6 +421,28 @@ class TestAdmin(TestCase):
         self.assertIn("INT_VALUE", content)
         self.assertIn("History", content)
 
+    def test_history_view_fetches_users_with_entries(self):
+        """Test that the history view loads each entry's user in the same query."""
+        ct = ContentType.objects.get_for_model(self.model)
+        editor = User.objects.create_user("editor", "editor@example.com", "editor")
+        for user in (self.superuser, editor):
+            LogEntry.objects.create(
+                user_id=user.pk,
+                content_type_id=ct.pk,
+                object_id="Config",
+                object_repr="Config",
+                action_flag=CHANGE,
+                change_message=json.dumps([{"changed": {"fields": ["INT_VALUE"]}}]),
+            )
+
+        request = self.rf.get("/admin/constance/config/history/")
+        request.user = self.superuser
+        response = self.options.history_view(request)
+        entries = list(response.context_data["action_list"])
+        with self.assertNumQueries(0):
+            usernames = {entry.user.get_username() for entry in entries}
+        self.assertEqual(usernames, {self.superuser.get_username(), "editor"})
+
     def test_history_view_empty(self):
         """Test that the history view renders correctly with no entries."""
         request = self.rf.get("/admin/constance/config/history/")
