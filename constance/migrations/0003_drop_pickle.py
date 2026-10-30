@@ -2,6 +2,9 @@ import json
 import logging
 import pickle
 from base64 import b64decode
+from datetime import date
+from datetime import datetime
+from datetime import time
 from importlib import import_module
 
 from django.db import migrations
@@ -27,14 +30,25 @@ def import_module_attr(path):
     return getattr(import_module(package), module)
 
 
+def load_pickled_value(value):
+    try:
+        return pickle.loads(value)  # noqa: S301
+    except UnicodeDecodeError:
+        # Python 2 date/time state uses binary strings, but application strings
+        # have no known encoding and must not be silently reinterpreted.
+        decoded = pickle.loads(value, encoding="latin1")  # noqa: S301
+        if type(decoded) not in (date, datetime, time):
+            raise
+        return decoded
+
+
 def migrate_pickled_data(apps, schema_editor) -> None:  # pragma: no cover
     Constance = apps.get_model("constance", "Constance")
     db_alias = schema_editor.connection.alias
 
     for constance in Constance.objects.using(db_alias).exclude(value=None):
         if not is_already_migrated(constance.value):
-            # encoding="latin1" is required to load datetime, date and time values pickled by Python 2.
-            constance.value = dumps(pickle.loads(b64decode(constance.value.encode()), encoding="latin1"))  # noqa: S301
+            constance.value = dumps(load_pickled_value(b64decode(constance.value.encode())))
             constance.save(using=db_alias, update_fields=["value"])
 
     if settings.BACKEND in (
@@ -57,7 +71,7 @@ def migrate_pickled_data(apps, schema_editor) -> None:  # pragma: no cover
             prefixed_key = f"{_prefix}{key}"
             value = _rd.get(prefixed_key)
             if value is not None and not is_already_migrated(value):
-                redis_migrated_data[prefixed_key] = dumps(pickle.loads(value, encoding="latin1"))  # noqa: S301
+                redis_migrated_data[prefixed_key] = dumps(load_pickled_value(value))
         for prefixed_key, value in redis_migrated_data.items():
             _rd.set(prefixed_key, value)
 

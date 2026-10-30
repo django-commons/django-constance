@@ -2,6 +2,7 @@ import pickle
 from base64 import b64encode
 from datetime import date
 from datetime import datetime
+from datetime import time
 from importlib import import_module
 from unittest import mock
 
@@ -29,6 +30,39 @@ PY2_DATETIME_PROTOCOL_0 = (
 class TestDropPickleMigration(TestCase):
     def migrate(self):
         drop_pickle.migrate_pickled_data(apps, connection.schema_editor())
+
+    @mock.patch("constance.settings.BACKEND", "constance.backends.database.DatabaseBackend")
+    def test_does_not_reinterpret_python2_database_strings(self):
+        record = Constance.objects.create(key="PY2_STRING")
+        for value in (b"\x80\x02U\x05caf\xc3\xa9.", b"S'caf\\xc3\\xa9'\n."):
+            with self.subTest(value=value):
+                record.value = b64encode(value).decode()
+                record.save()
+                with self.assertRaises(UnicodeDecodeError):
+                    self.migrate()
+                record.refresh_from_db()
+                self.assertEqual(record.value, b64encode(value).decode())
+
+    @mock.patch("constance.settings.BACKEND", "constance.backends.redisd.RedisBackend")
+    def test_does_not_reinterpret_python2_redis_strings(self):
+        redis = Connection()
+        self.addCleanup(redis.clear)
+        key = f"{settings.REDIS_PREFIX}STRING_VALUE"
+        for value in (b"\x80\x02U\x05caf\xc3\xa9.", b"S'caf\\xc3\\xa9'\n."):
+            with self.subTest(value=value):
+                redis.set(key, value)
+                with self.assertRaises(UnicodeDecodeError):
+                    self.migrate()
+                self.assertEqual(redis.get(key), value)
+
+    def test_loads_python2_time(self):
+        value = b"\x80\x02cdatetime\ntime\nU\x06\x0a\x1e\x00\x01\xe2\x40\x85R."
+        self.assertEqual(drop_pickle.load_pickled_value(value), time(10, 30, 0, 123456))
+
+    def test_preserves_existing_string_decoding(self):
+        for value in (b"\x80\x02U\x05hello.", pickle.dumps("caf\u00e9", 2)):
+            with self.subTest(value=value):
+                self.assertEqual(drop_pickle.load_pickled_value(value), pickle.loads(value))
 
     @mock.patch("constance.settings.BACKEND", "constance.backends.database.DatabaseBackend")
     def test_migrates_database_values(self):
